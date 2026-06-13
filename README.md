@@ -52,11 +52,18 @@ fleet-scanner ~/repos --format json | jq '.summary.average_health'
 
 Fleet Scanner is a diagnostic tool in the SuperInstance observability layer. It provides the ground-truth health metrics that feed into fleet-status dashboards. The scoring rubric maps to the **η** (reflex) side of **γ + η = C**: automated inspection replaces manual review, converting coordination cost into tooling. See [Architecture](https://github.com/SuperInstance/SuperInstance/blob/main/ARCHITECTURE.md).
 
+**Output formats**: The CLI supports two output modes via `--format`:
+- `table` (default): Rich Unicode table with colored health scores (green ≥ 80, yellow ≥ 40, red < 40), summary panel with language breakdown, and needs-attention flags
+- `json`: Machine-readable structured output suitable for piping to `jq` or feeding into dashboards
+
+**Use in CI**: Add `fleet-scanner ~/repos --format json | jq '[.summary.needs_attention | length]'` as a CI gate to block deploys when repos fall below health threshold.
+
 ## References
 
--.walkdir crate: Klabnik, S. "Recursive Directory Walking in Rust." https://docs.rs/walkdir
+- walkdir crate: Klabnik, S. "Recursive Directory Walking in Rust." https://docs.rs/walkdir
 - clap derive macros: https://docs.rs/clap/latest/clap/_derive/
 - Cohen, D. "Software Repository Health Metrics," IEEE Software (2021).
+- Munaiah, N. et al. "Curating GitHub for Engineered Software Projects," EMSE (2017).
 
 ## License
 
