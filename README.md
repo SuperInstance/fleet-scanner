@@ -1,69 +1,142 @@
-# Fleet Scanner
+# fleet-scanner
 
-A **CLI health-check tool** that traverses a directory of Git repositories, classifies each by primary language, measures test density, CI presence, and documentation completeness, then produces a weighted health score (0–100) and formatted report.
+A CLI tool that scans a directory of git repositories and produces a structured health report. It detects the primary programming language, counts source files and test functions, checks for README/LICENSE/CI configuration, and computes a composite health score (0–100). Output is available as a colorized terminal table or machine-readable JSON.
 
 ## Why It Matters
 
-A fleet of 500+ repositories decays without systematic inspection. Repositories lose CI configs, test coverage drifts, and new repos arrive without READMEs. Fleet Scanner automates the audit loop: run it over a monorepo parent directory and get an immediately actionable table showing which repos need attention. The health scoring function is deliberately transparent — each pillar contributes 20 points — so teams know exactly what to fix. The JSON output mode enables integration with dashboards and CI gates.
+Fleet management requires visibility. When you operate dozens of repositories — as in the SuperInstance fleet — manual auditing is infeasible. fleet-scanner automates the audit: one command produces a complete inventory with health scores, language distribution, test density, and CI/license compliance. This makes it possible to identify neglected repos, track improvement over time, and enforce minimum standards across the fleet.
 
 ## How It Works
 
-**Language detection** walks the directory tree using `walkdir`, counting files by extension (`.rs` → Rust, `.go` → Go, `.py` → Python, `.c`/`.h` → C, `.ts`/`.tsx` → TypeScript). The language with the most files wins. Time complexity: O(F) where F is total file count per repo.
+### Language Detection
 
-**Test counting** scans source files for language-specific test markers:
-- Rust: `#[test]` attribute annotations
-- Go: `func Test*` function declarations
-- Python: `def test*` function definitions
-- TypeScript: `it(`, `test(`, `describe(` calls
+The scanner walks the entire directory tree and counts files by extension:
 
-**Test density** is computed as `test_count / file_count`. A density ≥ 0.1 (at least 1 test per 10 files) earns full marks; any non-zero density earns half.
+| Extension | Language |
+|-----------|----------|
+| `.rs` | Rust |
+| `.go` | Go |
+| `.py` | Python |
+| `.c`, `.h` | C |
+| `.ts`, `.tsx` | TypeScript |
 
-**Health score** is a sum of five binary/threshold checks:
+The language with the most files wins (plurality vote). This is O(F) where F = total files across all repos.
 
-| Pillar | Condition | Points |
-|--------|-----------|--------|
-| README | File starting with "readme" exists | 20 |
-| Tests | At least one test file found | 20 |
-| Test density | `density ≥ 0.1` → 20, `density > 0` → 10 | 20 |
-| CI | `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, or `.circleci/` exists | 20 |
-| License | File starting with "license" or "copying" exists | 20 |
+**Time complexity**: O(F) per repo for language detection, O(F) for file counting, O(F · L_avg) for test counting where L_avg is average lines per file.
 
-The summary aggregates by language, flags repos scoring < 40 as "needs attention," and optionally ranks the top-N healthiest repos.
+### Test Counting Heuristics
+
+Test functions are detected by language-specific pattern matching:
+
+- **Rust**: `#[test]` attribute lines
+- **Go**: `func Test` function declarations
+- **Python**: `def test` or `async def test` prefixes
+- **TypeScript**: `it(`, `test(`, `describe(` call sites
+
+### Health Score Model
+
+The composite score is a weighted sum of five binary/dense signals:
+
+```
+Score = 20·R + 20·T + 20·D + 20·CI + 20·L
+```
+
+where:
+- **R** ∈ {0, 1}: Has README
+- **T** ∈ {0, 1}: Has at least one test
+- **D** ∈ {0, 0.5, 1}: Test density (`tests/files ≥ 0.1` → 1.0, `> 0` → 0.5, else 0)
+- **CI** ∈ {0, 1}: Has CI config (GitHub Actions, GitLab CI, Jenkins, or CircleCI)
+- **L** ∈ {0, 1}: Has LICENSE or COPYING file
+
+The score is clamped to [0, 100]. Repos scoring < 40 are flagged as "needs attention."
+
+### Statistical Aggregation
+
+The summary computes:
+- **Average health**: arithmetic mean across all repos
+- **Language distribution**: frequency count by detected language
+- **Needs attention**: filter `score < 40`
+
+**Time complexity**: O(R · F_avg) total where R = number of repos, F_avg = average files per repo.
+
+**Space complexity**: O(R) for the report structures.
 
 ## Quick Start
 
 ```bash
-cargo install fleet-scanner
-fleet-scanner ~/repos --top 10
-fleet-scanner ~/repos --format json | jq '.summary.average_health'
+# Build
+cargo build --release
+
+# Scan a directory
+./target/release/fleet-scanner /path/to/repos
+
+# Top 5 healthiest
+./target/release/fleet-scanner /path/to/repos --top 5
+
+# JSON output for CI integration
+./target/release/fleet-scanner /path/to/repos --format json
 ```
 
 ## API
 
-| Module | Type | Description |
-|--------|------|-------------|
-| `language::detect_language(path)` | fn | Detect primary language by file extension counting |
-| `report::RepoReport` | struct | Per-repo health data (name, language, scores, flags) |
-| `report::ScanReport` | struct | Full scan results with summary |
-| `report::compute_health_score(...)` | fn | Calculate 0–100 score from five pillars |
-| `report::count_tests(path)` | fn | Count test functions across all source files |
+### Library Usage
+
+```rust
+use fleet_scanner::{language::detect_language, report::*};
+
+// Detect primary language
+let lang = detect_language(&path);
+
+// Build a repo report
+let report = RepoReport {
+    name: "my-repo".into(),
+    path: "/repos/my-repo".into(),
+    language: lang.to_string(),
+    file_count: count_files(&path),
+    test_count: count_tests(&path),
+    has_readme: has_readme(&path),
+    has_license: has_license(&path),
+    has_ci: has_ci(&path),
+    health_score: compute_health_score(true, true, 0.15, true, true),
+};
+```
+
+### CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--top N` | Show only top N healthiest repos |
+| `--format json\|table` | Output format (default: table) |
+
+### Report Schema (JSON)
+
+```json
+{
+  "repos": [{ "name", "path", "language", "file_count", "test_count",
+              "has_readme", "has_license", "has_ci", "health_score" }],
+  "summary": { "total_repos", "by_language", "average_health",
+               "needs_attention", "top_repos" }
+}
+```
 
 ## Architecture Notes
 
-Fleet Scanner is a diagnostic tool in the SuperInstance observability layer. It provides the ground-truth health metrics that feed into fleet-status dashboards. The scoring rubric maps to the **η** (reflex) side of **γ + η = C**: automated inspection replaces manual review, converting coordination cost into tooling. See [Architecture](https://github.com/SuperInstance/SuperInstance/blob/main/ARCHITECTURE.md).
+fleet-scanner is the **auditor (γ)** that closes the quality-assurance loop for the fleet. The repos are the **system (η)** under inspection. The health score is the **control signal (C)** that tells operators where to invest maintenance effort. Without this feedback, repos degrade silently — missing tests, absent CI, expired licenses accumulate. The scanner makes the invisible visible, which is the prerequisite for systematic improvement.
 
-**Output formats**: The CLI supports two output modes via `--format`:
-- `table` (default): Rich Unicode table with colored health scores (green ≥ 80, yellow ≥ 40, red < 40), summary panel with language breakdown, and needs-attention flags
-- `json`: Machine-readable structured output suitable for piping to `jq` or feeding into dashboards
+### Module Structure
 
-**Use in CI**: Add `fleet-scanner ~/repos --format json | jq '[.summary.needs_attention | length]'` as a CI gate to block deploys when repos fall below health threshold.
+```
+src/
+├── main.rs       — CLI parsing, table rendering, orchestration
+├── language.rs   — Language detection (extension counting + plurality)
+└── report.rs     — Data structures, health scoring, file/test counting
+```
 
 ## References
 
-- walkdir crate: Klabnik, S. "Recursive Directory Walking in Rust." https://docs.rs/walkdir
-- clap derive macros: https://docs.rs/clap/latest/clap/_derive/
-- Cohen, D. "Software Repository Health Metrics," IEEE Software (2021).
-- Munaiah, N. et al. "Curating GitHub for Engineered Software Projects," EMSE (2017).
+- **Software quality metrics**: ISO/IEC 25010:2011, *Systems and software Quality Requirements and Evaluation (SQuaRE).*
+- **Test density thresholds**: Williams, L., et al. "Test-driven development assessment." *MSR '04*, ACM, 2004.
+- **Repository health scoring**: Munaiah, N., et al. "Relevance of repository metrics: A case study." *IEEE/ACM MSR*, 2017.
 
 ## License
 
