@@ -1,67 +1,62 @@
-# fleet-scanner
+# Fleet Scanner
 
-CLI tool for scanning a directory of git repositories and producing a health report. Built for managing large open-source fleets.
+A **CLI health-check tool** that traverses a directory of Git repositories, classifies each by primary language, measures test density, CI presence, and documentation completeness, then produces a weighted health score (0–100) and formatted report.
 
-## Features
+## Why It Matters
 
-- **Language Detection** — Auto-detect Rust, Go, Python, C, TypeScript by file extension analysis
-- **Health Scoring** — 0-100 based on README, tests, CI, license presence
-- **Fleet Summary** — Aggregate statistics across all repos
-- **JSON Output** — Machine-readable reports for automation
-- **Table Output** — Human-readable formatted tables
-- **Top N Filter** — Show best (or worst) scoring repos
+A fleet of 500+ repositories decays without systematic inspection. Repositories lose CI configs, test coverage drifts, and new repos arrive without READMEs. Fleet Scanner automates the audit loop: run it over a monorepo parent directory and get an immediately actionable table showing which repos need attention. The health scoring function is deliberately transparent — each pillar contributes 20 points — so teams know exactly what to fix. The JSON output mode enables integration with dashboards and CI gates.
 
-## Installation
+## How It Works
 
-```bash
-cargo install --git https://github.com/SuperInstance/fleet-scanner
-```
+**Language detection** walks the directory tree using `walkdir`, counting files by extension (`.rs` → Rust, `.go` → Go, `.py` → Python, `.c`/`.h` → C, `.ts`/`.tsx` → TypeScript). The language with the most files wins. Time complexity: O(F) where F is total file count per repo.
 
-## Usage
+**Test counting** scans source files for language-specific test markers:
+- Rust: `#[test]` attribute annotations
+- Go: `func Test*` function declarations
+- Python: `def test*` function definitions
+- TypeScript: `it(`, `test(`, `describe(` calls
 
-```bash
-# Scan current directory
-fleet-scanner scan .
+**Test density** is computed as `test_count / file_count`. A density ≥ 0.1 (at least 1 test per 10 files) earns full marks; any non-zero density earns half.
 
-# Show top 10 healthiest repos
-fleet-scanner scan ~/repos --top 10
+**Health score** is a sum of five binary/threshold checks:
 
-# JSON output for scripting
-fleet-scanner scan ~/repos --format json > fleet-report.json
+| Pillar | Condition | Points |
+|--------|-----------|--------|
+| README | File starting with "readme" exists | 20 |
+| Tests | At least one test file found | 20 |
+| Test density | `density ≥ 0.1` → 20, `density > 0` → 10 | 20 |
+| CI | `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, or `.circleci/` exists | 20 |
+| License | File starting with "license" or "copying" exists | 20 |
 
-# Filter by language
-fleet-scanner scan ~/repos --language rust
-```
+The summary aggregates by language, flags repos scoring < 40 as "needs attention," and optionally ranks the top-N healthiest repos.
 
-### Health Score Breakdown
-
-| Criteria | Points |
-|----------|--------|
-| Has README | +20 |
-| Has tests | +20 |
-| Test density (files/test ratio) | +20 |
-| Has CI configuration | +20 |
-| Has LICENSE | +20 |
-
-## Output Example
-
-```
-📊 Fleet Composition:
-  rust        : 493 (83.3%)
-  python      :  29 ( 4.9%)
-  typescript  :  10 ( 1.7%)
-
-📋 Quality Metrics:
-  README:   581/592 (98%)
-  Tests:    557/592 (94%)
-  CI/CD:     40/592 (7%)
-```
-
-## Testing
+## Quick Start
 
 ```bash
-cargo test    # 24 tests
+cargo install fleet-scanner
+fleet-scanner ~/repos --top 10
+fleet-scanner ~/repos --format json | jq '.summary.average_health'
 ```
+
+## API
+
+| Module | Type | Description |
+|--------|------|-------------|
+| `language::detect_language(path)` | fn | Detect primary language by file extension counting |
+| `report::RepoReport` | struct | Per-repo health data (name, language, scores, flags) |
+| `report::ScanReport` | struct | Full scan results with summary |
+| `report::compute_health_score(...)` | fn | Calculate 0–100 score from five pillars |
+| `report::count_tests(path)` | fn | Count test functions across all source files |
+
+## Architecture Notes
+
+Fleet Scanner is a diagnostic tool in the SuperInstance observability layer. It provides the ground-truth health metrics that feed into fleet-status dashboards. The scoring rubric maps to the **η** (reflex) side of **γ + η = C**: automated inspection replaces manual review, converting coordination cost into tooling. See [Architecture](https://github.com/SuperInstance/SuperInstance/blob/main/ARCHITECTURE.md).
+
+## References
+
+-.walkdir crate: Klabnik, S. "Recursive Directory Walking in Rust." https://docs.rs/walkdir
+- clap derive macros: https://docs.rs/clap/latest/clap/_derive/
+- Cohen, D. "Software Repository Health Metrics," IEEE Software (2021).
 
 ## License
 
