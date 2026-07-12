@@ -74,6 +74,16 @@ mod tests {
         assert_eq!(report::count_files(dir.path()), 3);
     }
 
+    #[test]
+    fn count_files_excludes_git() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("main.rs"), "").unwrap();
+        let git_objects = dir.path().join(".git/objects/ab");
+        fs::create_dir_all(&git_objects).unwrap();
+        fs::write(git_objects.join("deadbeef"), "blob").unwrap();
+        assert_eq!(report::count_files(dir.path()), 1);
+    }
+
     // --- test counting ---
 
     #[test]
@@ -107,6 +117,27 @@ mod tests {
         )
         .unwrap();
         assert_eq!(report::count_tests(dir.path()), 2);
+    }
+
+    #[test]
+    fn count_typescript_tests() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("app.test.ts"),
+            "it('works', () => {});\ntest('also', () => {});",
+        )
+        .unwrap();
+        assert_eq!(report::count_tests(dir.path()), 2);
+    }
+
+    #[test]
+    fn count_tests_excludes_git() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("lib.rs"), "#[test]\nfn real() {}").unwrap();
+        let git_dir = dir.path().join(".git");
+        fs::create_dir_all(&git_dir).unwrap();
+        fs::write(git_dir.join("fake.rs"), "#[test]\nfn fake() {}").unwrap();
+        assert_eq!(report::count_tests(dir.path()), 1);
     }
 
     // --- has_readme / has_license / has_ci ---
@@ -159,6 +190,29 @@ mod tests {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join(".gitlab-ci.yml"), "stages: []").unwrap();
         assert!(report::has_ci(dir.path()));
+    }
+
+    #[test]
+    fn detects_jenkins_ci() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("Jenkinsfile"), "").unwrap();
+        assert!(report::has_ci(dir.path()));
+    }
+
+    #[test]
+    fn detects_circleci() {
+        let dir = TempDir::new().unwrap();
+        let circle = dir.path().join(".circleci");
+        fs::create_dir_all(&circle).unwrap();
+        fs::write(circle.join("config.yml"), "").unwrap();
+        assert!(report::has_ci(dir.path()));
+    }
+
+    #[test]
+    fn empty_circleci_is_not_ci() {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir(dir.path().join(".circleci")).unwrap();
+        assert!(!report::has_ci(dir.path()));
     }
 
     #[test]

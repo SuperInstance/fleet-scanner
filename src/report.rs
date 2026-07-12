@@ -30,9 +30,14 @@ pub struct ScanReport {
     pub summary: ScanSummary,
 }
 
+fn is_inside_git_dir(entry: &walkdir::DirEntry) -> bool {
+    entry.path().components().any(|c| c.as_os_str() == ".git")
+}
+
 pub fn count_files(path: &Path) -> u32 {
     walkdir::WalkDir::new(path)
         .into_iter()
+        .filter_entry(|e| !is_inside_git_dir(e))
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .count() as u32
@@ -42,6 +47,7 @@ pub fn count_tests(path: &Path) -> u32 {
     let mut count = 0u32;
     for entry in walkdir::WalkDir::new(path)
         .into_iter()
+        .filter_entry(|e| !is_inside_git_dir(e))
         .filter_map(|e| e.ok())
     {
         if !entry.file_type().is_file() {
@@ -122,7 +128,11 @@ pub fn has_ci(path: &Path) -> bool {
     }
     let circle = path.join(".circleci");
     if circle.is_dir() {
-        return true;
+        if let Ok(entries) = std::fs::read_dir(&circle) {
+            if entries.count() > 0 {
+                return true;
+            }
+        }
     }
     false
 }

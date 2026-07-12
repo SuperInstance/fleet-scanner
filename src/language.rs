@@ -36,6 +36,7 @@ pub fn detect_language(path: &Path) -> Language {
 
     for entry in walkdir::WalkDir::new(path)
         .into_iter()
+        .filter_entry(|e| !e.path().components().any(|c| c.as_os_str() == ".git"))
         .filter_map(|e| e.ok())
     {
         if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
