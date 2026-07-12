@@ -1,7 +1,10 @@
 use clap::{Parser, ValueEnum};
 use colored::*;
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Table, ContentArrangement, Cell, Color as TableColor};
-use std::path::PathBuf;
+use comfy_table::{
+    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color as TableColor,
+    ContentArrangement, Table,
+};
+use std::path::{Path, PathBuf};
 
 use fleet_scanner::{language::detect_language, report::*};
 
@@ -28,7 +31,7 @@ enum OutputFormat {
     Table,
 }
 
-fn find_git_repos(path: &PathBuf) -> Vec<PathBuf> {
+fn find_git_repos(path: &Path) -> Vec<PathBuf> {
     let mut repos = Vec::new();
     if let Ok(entries) = std::fs::read_dir(path) {
         for entry in entries.flatten() {
@@ -42,7 +45,7 @@ fn find_git_repos(path: &PathBuf) -> Vec<PathBuf> {
     repos
 }
 
-fn scan_repo(path: &PathBuf) -> RepoReport {
+fn scan_repo(path: &Path) -> RepoReport {
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -56,7 +59,11 @@ fn scan_repo(path: &PathBuf) -> RepoReport {
     let has_l = has_license(path);
     let has_c = has_ci(path);
     let has_tests = test_count > 0;
-    let test_density = if file_count > 0 { test_count as f64 / file_count as f64 } else { 0.0 };
+    let test_density = if file_count > 0 {
+        test_count as f64 / file_count as f64
+    } else {
+        0.0
+    };
     let health_score = compute_health_score(has_r, has_tests, test_density, has_c, has_l);
 
     RepoReport {
@@ -72,16 +79,14 @@ fn scan_repo(path: &PathBuf) -> RepoReport {
     }
 }
 
-fn score_color(score: u32) -> Color {
-    if score >= 80 { Color::Green }
-    else if score >= 40 { Color::Yellow }
-    else { Color::Red }
-}
-
 fn score_table_color(score: u32) -> TableColor {
-    if score >= 80 { TableColor::Green }
-    else if score >= 40 { TableColor::Yellow }
-    else { TableColor::Red }
+    if score >= 80 {
+        TableColor::Green
+    } else if score >= 40 {
+        TableColor::Yellow
+    } else {
+        TableColor::Red
+    }
 }
 
 fn print_table(report: &ScanReport) {
@@ -89,13 +94,19 @@ fn print_table(report: &ScanReport) {
 
     // Repo table
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL)
+    table
+        .load_preset(UTF8_FULL)
         .apply_modifier(UTF8_ROUND_CORNERS)
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
-            Cell::new("Repo"), Cell::new("Language"), Cell::new("Files"),
-            Cell::new("Tests"), Cell::new("README"), Cell::new("CI"),
-            Cell::new("License"), Cell::new("Score"),
+            Cell::new("Repo"),
+            Cell::new("Language"),
+            Cell::new("Files"),
+            Cell::new("Tests"),
+            Cell::new("README"),
+            Cell::new("CI"),
+            Cell::new("License"),
+            Cell::new("Score"),
         ]);
 
     for repo in repos {
@@ -118,8 +129,11 @@ fn print_table(report: &ScanReport) {
     // Summary
     println!("\n{}", "📊 Summary".bold().cyan());
     println!("  Total repos: {}", summary.total_repos.to_string().bold());
-    println!("  Average health: {}", format!("{:.1}", summary.average_health).bold());
-    
+    println!(
+        "  Average health: {}",
+        format!("{:.1}", summary.average_health).bold()
+    );
+
     if !summary.by_language.is_empty() {
         println!("  By language:");
         let mut langs: Vec<_> = summary.by_language.iter().collect();
@@ -130,7 +144,11 @@ fn print_table(report: &ScanReport) {
     }
 
     if !summary.needs_attention.is_empty() {
-        println!("\n  {} {}", "⚠ ".yellow(), "Needs attention (score < 40):".yellow().bold());
+        println!(
+            "\n  {} {}",
+            "⚠ ".yellow(),
+            "Needs attention (score < 40):".yellow().bold()
+        );
         for name in &summary.needs_attention {
             println!("    {} {}", "•".red(), name.red());
         }
@@ -141,24 +159,39 @@ fn main() {
     let cli = Cli::parse();
 
     if !cli.path.exists() {
-        eprintln!("{} Path does not exist: {}", "Error:".red().bold(), cli.path.display());
+        eprintln!(
+            "{} Path does not exist: {}",
+            "Error:".red().bold(),
+            cli.path.display()
+        );
         std::process::exit(1);
     }
 
     if !cli.path.is_dir() {
-        eprintln!("{} Path is not a directory: {}", "Error:".red().bold(), cli.path.display());
+        eprintln!(
+            "{} Path is not a directory: {}",
+            "Error:".red().bold(),
+            cli.path.display()
+        );
         std::process::exit(1);
     }
 
     let repos = find_git_repos(&cli.path);
     if repos.is_empty() {
-        eprintln!("{} No git repositories found in {}", "Warning:".yellow().bold(), cli.path.display());
+        eprintln!(
+            "{} No git repositories found in {}",
+            "Warning:".yellow().bold(),
+            cli.path.display()
+        );
         std::process::exit(0);
     }
 
     let repo_reports: Vec<RepoReport> = repos.iter().map(|r| scan_repo(r)).collect();
     let summary = compute_summary(&repo_reports, cli.top);
-    let report = ScanReport { repos: repo_reports, summary };
+    let report = ScanReport {
+        repos: repo_reports,
+        summary,
+    };
 
     match cli.format {
         OutputFormat::Json => {

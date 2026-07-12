@@ -40,11 +40,18 @@ pub fn count_files(path: &Path) -> u32 {
 
 pub fn count_tests(path: &Path) -> u32 {
     let mut count = 0u32;
-    for entry in walkdir::WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+    for entry in walkdir::WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if !entry.file_type().is_file() {
             continue;
         }
-        let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("");
+        let ext = entry
+            .path()
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
         if !matches!(ext, "rs" | "go" | "py" | "ts" | "tsx") {
             continue;
         }
@@ -57,10 +64,19 @@ pub fn count_tests(path: &Path) -> u32 {
 
 fn count_tests_in_content(content: &str, ext: &str) -> u32 {
     match ext {
-        "rs" => content.lines().filter(|l| l.trim().starts_with("#[test]")).count() as u32,
+        "rs" => content
+            .lines()
+            .filter(|l| l.trim().starts_with("#[test]"))
+            .count() as u32,
         "go" => content.lines().filter(|l| l.contains("func Test")).count() as u32,
-        "py" => content.lines().filter(|l| l.trim().starts_with("def test") || l.trim().starts_with("async def test")).count() as u32,
-        "ts" | "tsx" => content.lines().filter(|l| l.contains("it(") || l.contains("test(") || l.contains("describe(")).count() as u32,
+        "py" => content
+            .lines()
+            .filter(|l| l.trim().starts_with("def test") || l.trim().starts_with("async def test"))
+            .count() as u32,
+        "ts" | "tsx" => content
+            .lines()
+            .filter(|l| l.contains("it(") || l.contains("test(") || l.contains("describe("))
+            .count() as u32,
         _ => 0,
     }
 }
@@ -119,11 +135,23 @@ pub fn compute_health_score(
     has_license: bool,
 ) -> u32 {
     let mut score = 0u32;
-    if has_readme { score += 20; }
-    if has_tests { score += 20; }
-    if test_density >= 0.1 { score += 20; } else if test_density > 0.0 { score += 10; }
-    if has_ci { score += 20; }
-    if has_license { score += 20; }
+    if has_readme {
+        score += 20;
+    }
+    if has_tests {
+        score += 20;
+    }
+    if test_density >= 0.1 {
+        score += 20;
+    } else if test_density > 0.0 {
+        score += 10;
+    }
+    if has_ci {
+        score += 20;
+    }
+    if has_license {
+        score += 20;
+    }
     score.min(100)
 }
 
@@ -146,7 +174,7 @@ pub fn compute_summary(repos: &[RepoReport], top_n: Option<usize>) -> ScanSummar
         .collect();
 
     let mut sorted: Vec<RepoReport> = repos.to_vec();
-    sorted.sort_by(|a, b| b.health_score.cmp(&a.health_score));
+    sorted.sort_by_key(|a| std::cmp::Reverse(a.health_score));
     let limit = top_n.unwrap_or(sorted.len());
     let top_repos = sorted.into_iter().take(limit).collect();
 

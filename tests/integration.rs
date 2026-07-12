@@ -10,28 +10,40 @@ mod tests {
     fn detect_rust() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
-        assert_eq!(language::detect_language(dir.path()), language::Language::Rust);
+        assert_eq!(
+            language::detect_language(dir.path()),
+            language::Language::Rust
+        );
     }
 
     #[test]
     fn detect_go() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("main.go"), "package main").unwrap();
-        assert_eq!(language::detect_language(dir.path()), language::Language::Go);
+        assert_eq!(
+            language::detect_language(dir.path()),
+            language::Language::Go
+        );
     }
 
     #[test]
     fn detect_python() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("app.py"), "print('hi')").unwrap();
-        assert_eq!(language::detect_language(dir.path()), language::Language::Python);
+        assert_eq!(
+            language::detect_language(dir.path()),
+            language::Language::Python
+        );
     }
 
     #[test]
     fn detect_typescript() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join("index.ts"), "console.log('hi')").unwrap();
-        assert_eq!(language::detect_language(dir.path()), language::Language::TypeScript);
+        assert_eq!(
+            language::detect_language(dir.path()),
+            language::Language::TypeScript
+        );
     }
 
     #[test]
@@ -44,7 +56,10 @@ mod tests {
     #[test]
     fn detect_unknown_when_empty() {
         let dir = TempDir::new().unwrap();
-        assert_eq!(language::detect_language(dir.path()), language::Language::Unknown);
+        assert_eq!(
+            language::detect_language(dir.path()),
+            language::Language::Unknown
+        );
     }
 
     // --- file counting ---
@@ -64,21 +79,33 @@ mod tests {
     #[test]
     fn count_rust_tests() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("lib.rs"), "#[test]\nfn test_one() {}\n#[test]\nfn test_two() {}").unwrap();
+        fs::write(
+            dir.path().join("lib.rs"),
+            "#[test]\nfn test_one() {}\n#[test]\nfn test_two() {}",
+        )
+        .unwrap();
         assert_eq!(report::count_tests(dir.path()), 2);
     }
 
     #[test]
     fn count_go_tests() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("main_test.go"), "func TestSomething(t *testing.T) {}").unwrap();
+        fs::write(
+            dir.path().join("main_test.go"),
+            "func TestSomething(t *testing.T) {}",
+        )
+        .unwrap();
         assert_eq!(report::count_tests(dir.path()), 1);
     }
 
     #[test]
     fn count_python_tests() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("test_app.py"), "def test_one(): pass\ndef test_two(): pass").unwrap();
+        fs::write(
+            dir.path().join("test_app.py"),
+            "def test_one(): pass\ndef test_two(): pass",
+        )
+        .unwrap();
         assert_eq!(report::count_tests(dir.path()), 2);
     }
 
@@ -167,14 +194,26 @@ mod tests {
     fn summary_needs_attention() {
         let repos = vec![
             report::RepoReport {
-                name: "bad".into(), path: "/bad".into(), language: "Rust".into(),
-                file_count: 1, test_count: 0, has_readme: false, has_license: false,
-                has_ci: false, health_score: 10,
+                name: "bad".into(),
+                path: "/bad".into(),
+                language: "Rust".into(),
+                file_count: 1,
+                test_count: 0,
+                has_readme: false,
+                has_license: false,
+                has_ci: false,
+                health_score: 10,
             },
             report::RepoReport {
-                name: "good".into(), path: "/good".into(), language: "Go".into(),
-                file_count: 10, test_count: 5, has_readme: true, has_license: true,
-                has_ci: true, health_score: 100,
+                name: "good".into(),
+                path: "/good".into(),
+                language: "Go".into(),
+                file_count: 10,
+                test_count: 5,
+                has_readme: true,
+                has_license: true,
+                has_ci: true,
+                health_score: 100,
             },
         ];
         let summary = report::compute_summary(&repos, None);
@@ -187,14 +226,26 @@ mod tests {
     fn summary_top_n() {
         let repos = vec![
             report::RepoReport {
-                name: "a".into(), path: "/a".into(), language: "Rust".into(),
-                file_count: 1, test_count: 0, has_readme: true, has_license: false,
-                has_ci: false, health_score: 20,
+                name: "a".into(),
+                path: "/a".into(),
+                language: "Rust".into(),
+                file_count: 1,
+                test_count: 0,
+                has_readme: true,
+                has_license: false,
+                has_ci: false,
+                health_score: 20,
             },
             report::RepoReport {
-                name: "b".into(), path: "/b".into(), language: "Go".into(),
-                file_count: 10, test_count: 5, has_readme: true, has_license: true,
-                has_ci: true, health_score: 100,
+                name: "b".into(),
+                path: "/b".into(),
+                language: "Go".into(),
+                file_count: 10,
+                test_count: 5,
+                has_readme: true,
+                has_license: true,
+                has_ci: true,
+                health_score: 100,
             },
         ];
         let summary = report::compute_summary(&repos, Some(1));
@@ -206,19 +257,37 @@ mod tests {
     fn summary_by_language() {
         let repos = vec![
             report::RepoReport {
-                name: "a".into(), path: "/a".into(), language: "Rust".into(),
-                file_count: 1, test_count: 0, has_readme: false, has_license: false,
-                has_ci: false, health_score: 0,
+                name: "a".into(),
+                path: "/a".into(),
+                language: "Rust".into(),
+                file_count: 1,
+                test_count: 0,
+                has_readme: false,
+                has_license: false,
+                has_ci: false,
+                health_score: 0,
             },
             report::RepoReport {
-                name: "b".into(), path: "/b".into(), language: "Rust".into(),
-                file_count: 1, test_count: 0, has_readme: false, has_license: false,
-                has_ci: false, health_score: 0,
+                name: "b".into(),
+                path: "/b".into(),
+                language: "Rust".into(),
+                file_count: 1,
+                test_count: 0,
+                has_readme: false,
+                has_license: false,
+                has_ci: false,
+                health_score: 0,
             },
             report::RepoReport {
-                name: "c".into(), path: "/c".into(), language: "Go".into(),
-                file_count: 1, test_count: 0, has_readme: false, has_license: false,
-                has_ci: false, health_score: 0,
+                name: "c".into(),
+                path: "/c".into(),
+                language: "Go".into(),
+                file_count: 1,
+                test_count: 0,
+                has_readme: false,
+                has_license: false,
+                has_ci: false,
+                health_score: 0,
             },
         ];
         let summary = report::compute_summary(&repos, None);
