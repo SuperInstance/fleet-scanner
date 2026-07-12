@@ -2,6 +2,7 @@
 mod tests {
     use fleet_scanner::*;
     use std::fs;
+    use std::process::Command;
     use tempfile::TempDir;
 
     // --- language detection ---
@@ -347,5 +348,105 @@ mod tests {
         let summary = report::compute_summary(&repos, None);
         assert_eq!(*summary.by_language.get("Rust").unwrap(), 2);
         assert_eq!(*summary.by_language.get("Go").unwrap(), 1);
+    }
+
+    // --- CLI ---
+
+    fn bin() -> &'static str {
+        env!("CARGO_BIN_EXE_fleet-scanner")
+    }
+
+    fn make_repo(dir: &std::path::Path, name: &str, perfect: bool) {
+        let repo = dir.join(name);
+        fs::create_dir_all(&repo).unwrap();
+        fs::create_dir(repo.join(".git")).unwrap();
+        if perfect {
+            fs::write(repo.join("README.md"), "# test").unwrap();
+            fs::write(repo.join("LICENSE"), "MIT").unwrap();
+            fs::create_dir_all(repo.join(".github/workflows")).unwrap();
+            fs::write(repo.join(".github/workflows/ci.yml"), "name: CI").unwrap();
+            fs::create_dir(repo.join("src")).unwrap();
+            fs::write(repo.join("src/main.rs"), "fn main() {}").unwrap();
+            fs::create_dir(repo.join("tests")).unwrap();
+            fs::write(repo.join("tests/lib.rs"), "#[test]\nfn t() {}").unwrap();
+        }
+    }
+
+    #[test]
+    fn cli_rejects_missing_path() {
+        let output = Command::new(bin())
+            .arg("/definitely/does/not/exist")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Path does not exist"));
+    }
+
+    #[test]
+    fn cli_rejects_non_directory_path() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("not-a-dir");
+        fs::write(&file, "").unwrap();
+        let output = Command::new(bin()).arg(&file).output().unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Path is not a directory"));
+    }
+
+    #[test]
+    fn cli_warns_when_no_repos() {
+        let dir = TempDir::new().unwrap();
+        let output = Command::new(bin()).arg(dir.path()).output().unwrap();
+        assert!(output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("No git repositories found"));
+    }
+
+    #[test]
+    fn cli_json_output() {
+        let dir = TempDir::new().unwrap();
+        make_repo(dir.path(), "good", true);
+        let output = Command::new(bin())
+            .arg(dir.path())
+            .arg("--format")
+            .arg("json")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: report::ScanReport =
+            serde_json::from_slice(&output.stdout).expect("valid JSON");
+        assert_eq!(report.summary.total_repos, 1);
+        assert_eq!(report.repos[0].name, "good");
+        assert_eq!(report.repos[0].health_score, 100);
+    }
+
+    #[test]
+    fn cli_top_n_limits_results() {
+        let dir = TempDir::new().unwrap();
+        make_repo(dir.path(), "bad", false);
+        make_repo(dir.path(), "good", true);
+        let output = Command::new(bin())
+            .arg(dir.path())
+            .arg("--format")
+            .arg("json")
+            .arg("--top")
+            .arg("1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: report::ScanReport =
+            serde_json::from_slice(&output.stdout).expect("valid JSON");
+        assert_eq!(report.summary.total_repos, 2);
+        assert_eq!(report.summary.top_repos.len(), 1);
+        assert_eq!(report.summary.top_repos[0].name, "good");
     }
 }
