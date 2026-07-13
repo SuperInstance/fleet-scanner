@@ -26,22 +26,32 @@ impl std::fmt::Display for Language {
 }
 
 pub fn detect_language(path: &Path) -> Language {
-    let mut counts = [(Language::Rust, 0u32), (Language::Go, 0), (Language::Python, 0), (Language::C, 0), (Language::TypeScript, 0)];
+    let mut counts = [
+        (Language::Rust, 0u32),
+        (Language::Go, 0),
+        (Language::Python, 0),
+        (Language::C, 0),
+        (Language::TypeScript, 0),
+    ];
 
-    for entry in walkdir::WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
-            if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                match ext {
-                    "rs" => counts[0].1 += 1,
-                    "go" => counts[1].1 += 1,
-                    "py" => counts[2].1 += 1,
-                    "c" | "h" => counts[3].1 += 1,
-                    "ts" | "tsx" => counts[4].1 += 1,
-                    _ => {}
-                }
+    for entry in walkdir::WalkDir::new(path)
+        .into_iter()
+        .filter_entry(|e| !e.path().components().any(|c| c.as_os_str() == ".git"))
+        .filter_map(|e| e.ok())
+    {
+        if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
+            match ext {
+                "rs" => counts[0].1 += 1,
+                "go" => counts[1].1 += 1,
+                "py" => counts[2].1 += 1,
+                "c" | "h" => counts[3].1 += 1,
+                "ts" | "tsx" => counts[4].1 += 1,
+                _ => {}
             }
+        }
     }
 
-    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    counts.sort_by_key(|a| std::cmp::Reverse(a.1));
     if counts[0].1 > 0 {
         counts[0].0
     } else {
